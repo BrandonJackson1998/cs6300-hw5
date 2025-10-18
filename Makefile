@@ -41,5 +41,11 @@ explore:
 index:
 	source $(VENV)/bin/activate; python -m src.indexing
 
+query:
+	source $(VENV)/bin/activate; python -m src.rag_agent
+
+test-query:
+	source $(VENV)/bin/activate; python -c "from src.rag_agent import BoardGameRAG; rag = BoardGameRAG(); rag.query('What are good cooperative games?')"
+
 clean-index:
 	rm -rf chroma_db/
