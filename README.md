@@ -9,6 +9,7 @@ A sophisticated Retrieval-Augmented Generation (RAG) system for querying BoardGa
 - **Local Embeddings**: Uses HuggingFace embeddings (no API quota limits)
 - **Rating Threshold Filtering**: Precise numeric filtering for "games rated above 8.5"
 - **Edge Case Handling**: Graceful fallbacks when filters are too restrictive
+- **Automated Evaluation**: LLM-as-a-judge quality assessment using Ollama Llama 3.2
 - **Interactive Interface**: Command-line chat interface with example queries
 
 ## 🚀 Quick Start
@@ -36,7 +37,31 @@ echo "GEMINI_API_KEY=your_api_key_here" > .env
 make index
 ```
 
-### 3. Start Querying
+### 3. Setup Evaluation (Optional)
+
+For automated quality assessment with LLM-as-a-judge:
+
+```bash
+# Complete Ollama setup (macOS)
+make ollama-setup
+
+# Or manual setup:
+make ollama-install    # Install Ollama
+make ollama-start      # Start service
+make ollama-pull-model # Download Llama 3.2 model
+
+# Check status
+make ollama-status
+```
+
+**Note**: Evaluation works without Ollama (graceful fallback), but with Ollama you get:
+- Retrieval relevance scoring (1-10)
+- Answer accuracy assessment (1-10) 
+- Completeness evaluation (1-10)
+- Citation quality analysis (1-10)
+- Visual score bars and detailed feedback
+
+### 4. Start Querying
 ```bash
 # Launch interactive query interface
 make query
@@ -132,8 +157,34 @@ Create a `.env` file in the project root with these variables.
 - **Embedding Model**: all-MiniLM-L6-v2 (384 dimensions)
 - **Vector Database**: ChromaDB with persistence
 - **LLM**: Gemini 2.5 Flash
+- **Evaluation Judge**: Ollama Llama 3.2 (optional)
 - **Default Results**: Top 20 games per query
 - **Indexing Strategy**: 2-chunk per game (description + metadata)
+
+### Ollama Setup (for Evaluation)
+
+The system includes automated quality assessment using Ollama Llama 3.2 as an LLM judge:
+
+```bash
+# Complete setup (macOS)
+make ollama-setup
+
+# Manual steps
+make ollama-install      # Install Ollama via brew (macOS) 
+make ollama-start        # Start Ollama service
+make ollama-pull-model   # Download Llama 3.2 model (2GB)
+
+# Management
+make ollama-status       # Check service status
+make ollama-stop         # Stop Ollama service
+```
+
+**Evaluation Features**:
+- **Retrieval Relevance**: How well retrieved games match the query
+- **Answer Accuracy**: Factual correctness of generated responses  
+- **Answer Completeness**: Whether all aspects of query are addressed
+- **Citation Quality**: How well games are referenced and described
+- **Visual Scoring**: Progress bars and detailed feedback after each query
 
 ## 🔧 Advanced Usage
 

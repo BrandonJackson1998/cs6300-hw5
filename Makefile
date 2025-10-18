@@ -20,6 +20,14 @@ help:
 	@echo "  query                     - Interactive RAG query interface"
 	@echo "  test-query                - Run a simple test query"
 	@echo
+	@echo "Evaluation (Ollama):"
+	@echo "  ollama-install            - Install Ollama (macOS only)"
+	@echo "  ollama-start              - Start Ollama service"
+	@echo "  ollama-stop               - Stop Ollama service"
+	@echo "  ollama-pull-model         - Download Llama 3.2 model"
+	@echo "  ollama-status             - Check Ollama service status"
+	@echo "  ollama-setup              - Complete Ollama setup (install + start + model)"
+	@echo
 	@echo "Environment:"
 	@echo "  clean                     - Clean all generated files"
 	@echo "  clean-all                 - Clean everything including venv"
@@ -72,3 +80,53 @@ clean-all: clean
 
 clean-index:
 	rm -rf chroma_db/
+
+# Ollama management commands
+ollama-install:
+	@echo "Installing Ollama (macOS only)..."
+	@if [[ "$$(uname)" == "Darwin" ]]; then \
+		brew list --versions ollama > /dev/null 2>&1 || brew install ollama; \
+		echo "✓ Ollama installed"; \
+	else \
+		echo "❌ This command is for macOS only. For Linux, run:"; \
+		echo "   curl -fsSL https://ollama.ai/install.sh | sh"; \
+	fi
+
+ollama-start:
+	@echo "Starting Ollama service..."
+	@if [[ "$$(uname)" == "Darwin" ]]; then \
+		brew services start ollama; \
+		echo "✓ Ollama service started"; \
+	else \
+		echo "Starting Ollama manually..."; \
+		ollama serve & \
+		echo "✓ Ollama service started in background"; \
+	fi
+
+ollama-stop:
+	@echo "Stopping Ollama service..."
+	@if [[ "$$(uname)" == "Darwin" ]]; then \
+		brew services stop ollama; \
+		echo "✓ Ollama service stopped"; \
+	else \
+		pkill -f "ollama serve" || echo "Ollama not running"; \
+		echo "✓ Ollama service stopped"; \
+	fi
+
+ollama-pull-model:
+	@echo "Downloading Llama 3.2 model (this may take a few minutes)..."
+	ollama pull llama3.2
+	@echo "✓ Llama 3.2 model downloaded"
+
+ollama-status:
+	@echo "Checking Ollama status..."
+	@if [[ "$$(uname)" == "Darwin" ]]; then \
+		brew services list | grep ollama || echo "Ollama not managed by brew services"; \
+	fi
+	@ollama list 2>/dev/null || echo "❌ Ollama not running or not installed"
+
+ollama-setup: ollama-install ollama-start ollama-pull-model
+	@echo "✅ Ollama setup complete!"
+	@echo "   • Ollama installed and running"
+	@echo "   • Llama 3.2 model downloaded"
+	@echo "   • Ready for RAG evaluation"

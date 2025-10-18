@@ -224,6 +224,20 @@ class BoardGameRAG:
             self.preprocessor = QueryPreprocessor()
             print("✓ Query preprocessor initialized")
         
+        # Initialize Ollama judge for evaluation
+        print("Initializing evaluation judge (Ollama Llama 3.2)...")
+        try:
+            from langchain_community.llms import Ollama
+            self.judge_llm = Ollama(
+                model="llama3.2",
+                temperature=0.1  # Low temperature for consistent evaluation
+            )
+            print("✓ Evaluation judge initialized")
+        except Exception as e:
+            print(f"⚠️  Evaluation judge failed to initialize: {e}")
+            print("   Evaluation will be skipped (Ollama may not be installed)")
+            self.judge_llm = None
+        
         # Create prompt template
         self.prompt_template = PromptTemplate(
             input_variables=["context", "question"],
@@ -705,12 +719,167 @@ Game {i}: {meta['name']} ({meta['year_published']})
             print(answer)
             print(f"{'='*80}\n")
         
+        # Step 4: Evaluate (if judge is available)
+        evaluation_scores = None
+        if self.judge_llm:
+            evaluation_scores = self.evaluate(question, documents, answer)
+        
         return {
             'question': question,
             'answer': answer,
             'retrieved_documents': documents,
-            'num_retrieved': len(documents)
+            'num_retrieved': len(documents),
+            'evaluation': evaluation_scores
         }
+    
+    def evaluate(self, query: str, retrieved_docs: List[Document], answer: str) -> Dict[str, Any]:
+        """
+        Evaluate retrieval and generation quality using LLM-as-a-judge
+        
+        Args:
+            query: Original user query
+            retrieved_docs: Documents retrieved from vector store
+            answer: Generated answer from LLM
+            
+        Returns:
+            Dictionary with scores and feedback
+        """
+        if not self.judge_llm:
+            return {
+                'retrieval_relevance': None,
+                'answer_accuracy': None,
+                'answer_completeness': None,
+                'citation_quality': None,
+                'overall': None
+            }
+        
+        print("\n" + "="*80)
+        print("EVALUATION (LLM-as-a-judge with Llama 3.2)")
+        print("="*80)
+        
+        # Create evaluation prompt
+        retrieved_games = "\n".join([
+            f"- {doc.metadata['name']} (Rating: {doc.metadata['avg_rating']:.2f}, "
+            f"Mechanics: {doc.metadata['mechanics'][:100]}...)"
+            for doc in retrieved_docs[:5]  # Show top 5
+        ])
+        
+        eval_prompt = f"""You are an expert evaluator for a board game recommendation system. Evaluate the following query-response pair.
+
+QUERY: {query}
+
+RETRIEVED GAMES:
+{retrieved_games}
+
+GENERATED ANSWER:
+{answer}
+
+Evaluate the following aspects on a scale of 1-10:
+
+1. RETRIEVAL RELEVANCE (1-10): Do the retrieved games match what the query asked for?
+   - Check if mechanics, themes, categories match the query
+   - Check if ratings/player counts are appropriate
+   - Are these games actually relevant?
+
+2. ANSWER ACCURACY (1-10): Is the generated answer factually correct based on the retrieved games?
+   - Does it accurately describe the games?
+   - Are the ratings, player counts, mechanics correct?
+   - No hallucinations?
+
+3. ANSWER COMPLETENESS (1-10): Does the answer fully address the query?
+   - Does it answer all parts of the question?
+   - Provides enough detail?
+   - Addresses user intent?
+
+4. CITATION QUALITY (1-10): Does the answer properly reference specific games?
+   - Names specific games?
+   - Includes relevant metadata (players, time, mechanics)?
+   - Clear which games are being recommended?
+
+Respond in this EXACT format:
+RETRIEVAL_RELEVANCE: [score]/10
+REASON: [one sentence]
+
+ANSWER_ACCURACY: [score]/10
+REASON: [one sentence]
+
+ANSWER_COMPLETENESS: [score]/10
+REASON: [one sentence]
+
+CITATION_QUALITY: [score]/10
+REASON: [one sentence]
+
+OVERALL: [average score]/10
+"""
+        
+        try:
+            # Get evaluation from judge
+            evaluation = self.judge_llm.invoke(eval_prompt)
+            
+            # Parse scores
+            scores = self._parse_evaluation(evaluation)
+            
+            # Display results
+            self._display_evaluation(scores, evaluation)
+            
+            return scores
+            
+        except Exception as e:
+            print(f"⚠️  Evaluation failed: {e}")
+            return {
+                'retrieval_relevance': None,
+                'answer_accuracy': None,
+                'answer_completeness': None,
+                'citation_quality': None,
+                'overall': None
+            }
+    
+    def _parse_evaluation(self, evaluation: str) -> Dict[str, float]:
+        """Parse scores from evaluation text"""
+        import re
+        
+        scores = {}
+        
+        # Extract scores using regex
+        patterns = {
+            'retrieval_relevance': r'RETRIEVAL_RELEVANCE:\s*(\d+(?:\.\d+)?)',
+            'answer_accuracy': r'ANSWER_ACCURACY:\s*(\d+(?:\.\d+)?)',
+            'answer_completeness': r'ANSWER_COMPLETENESS:\s*(\d+(?:\.\d+)?)',
+            'citation_quality': r'CITATION_QUALITY:\s*(\d+(?:\.\d+)?)',
+            'overall': r'OVERALL:\s*(\d+(?:\.\d+)?)'
+        }
+        
+        for key, pattern in patterns.items():
+            match = re.search(pattern, evaluation, re.IGNORECASE)
+            if match:
+                scores[key] = float(match.group(1))
+            else:
+                scores[key] = None
+        
+        return scores
+    
+    def _display_evaluation(self, scores: Dict[str, float], full_evaluation: str):
+        """Display evaluation results in a nice format"""
+        
+        def score_bar(score):
+            """Create a visual bar for the score"""
+            if score is None:
+                return "N/A"
+            filled = int(score)
+            empty = 10 - filled
+            return f"{'█' * filled}{'░' * empty} {score:.1f}/10"
+        
+        print("\nScores:")
+        print(f"  Retrieval Relevance:   {score_bar(scores.get('retrieval_relevance'))}")
+        print(f"  Answer Accuracy:       {score_bar(scores.get('answer_accuracy'))}")
+        print(f"  Answer Completeness:   {score_bar(scores.get('answer_completeness'))}")
+        print(f"  Citation Quality:      {score_bar(scores.get('citation_quality'))}")
+        print(f"  {'─'*50}")
+        print(f"  Overall Score:         {score_bar(scores.get('overall'))}")
+        
+        print("\nDetailed Feedback:")
+        print(full_evaluation)
+        print("="*80 + "\n")
 
 def main():
     """Interactive query interface"""
