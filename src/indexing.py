@@ -81,7 +81,7 @@ class BoardGameIndexer:
             active_themes = self.get_active_features(game_themes, theme_cols)
             active_subcats = self.get_active_features(game_subcats, subcat_cols)
             
-            # Create metadata dictionary
+            # Create metadata dictionary with additional fields
             metadata = {
                 'bgg_id': int(bgg_id),
                 'name': str(game['Name']),
@@ -91,6 +91,8 @@ class BoardGameIndexer:
                 'playtime': int(game['MfgPlaytime']),
                 'min_age': int(game['MfgAgeRec']),
                 'avg_rating': float(game['AvgRating']),
+                'bayes_avg_rating': float(game['BayesAvgRating']),
+                'best_players': int(game['BestPlayers']),
                 'game_weight': float(game['GameWeight']),
                 'num_ratings': int(game['NumUserRatings']),
                 'mechanics': ', '.join(active_mechanics) if active_mechanics else 'None',
@@ -105,9 +107,22 @@ class BoardGameIndexer:
             # Filter out any remaining None values (ChromaDB requirement)
             metadata = {k: v for k, v in metadata.items() if v is not None}
             
-            # Create document
+            # Create enriched content for embedding (hybrid approach)
+            player_range = f"{game['MinPlayers']}-{game['MaxPlayers']}" if game['MinPlayers'] != game['MaxPlayers'] else str(game['MinPlayers'])
+            
+            enriched_content = f"""{game['Name']}
+
+Description: {game['Description']}
+
+Mechanics: {', '.join(active_mechanics) if active_mechanics else 'None'}
+Themes: {', '.join(active_themes) if active_themes else 'None'}
+Categories: {', '.join(active_subcats) if active_subcats else 'None'}
+Players: {player_range}
+Playtime: {game['MfgPlaytime']} minutes"""
+            
+            # Create document with enriched content
             doc = Document(
-                page_content=game['Description'],
+                page_content=enriched_content,
                 metadata=metadata
             )
             documents.append(doc)
