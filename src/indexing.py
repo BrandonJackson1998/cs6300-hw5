@@ -4,20 +4,16 @@ Indexing Pipeline for BoardGameGeek RAG System
 This module handles:
 1. Loading and merging game data with mechanics, themes, and subcategories
 2. Creating chunks (1 game = 1 chunk)
-3. Generating embeddings using Google's embedding model
+3. Generating embeddings using HuggingFace's local embedding model
 4. Storing in ChromaDB with metadata
 """
 
 import pandas as pd
 import os
 from typing import List, Dict, Any
-from dotenv import load_dotenv
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.docstore.document import Document
-
-# Load environment variables
-load_dotenv()
 
 class BoardGameIndexer:
     """Handles indexing of BoardGameGeek data into ChromaDB"""
@@ -25,7 +21,11 @@ class BoardGameIndexer:
     def __init__(self, data_dir: str = "data", persist_dir: str = "chroma_db"):
         self.data_dir = data_dir
         self.persist_dir = persist_dir
-        self.embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        # Use HuggingFace embeddings (local, no API key needed)
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",  # Fast, good quality, local
+            model_kwargs={'device': 'cpu'}
+        )
         
     def load_data(self) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Load all CSV files"""
@@ -65,6 +65,7 @@ class BoardGameIndexer:
         
         # Filter out games without descriptions
         games_with_desc = games[games['Description'].notna()].copy()
+        
         print(f"Processing {len(games_with_desc)} games with descriptions...")
         
         for idx, game in games_with_desc.iterrows():
@@ -92,11 +93,17 @@ class BoardGameIndexer:
                 'avg_rating': float(game['AvgRating']),
                 'game_weight': float(game['GameWeight']),
                 'num_ratings': int(game['NumUserRatings']),
-                'rank': int(game['Rank:boardgame']) if game['Rank:boardgame'] != 21926 else None,
                 'mechanics': ', '.join(active_mechanics) if active_mechanics else 'None',
                 'themes': ', '.join(active_themes) if active_themes else 'None',
                 'subcategories': ', '.join(active_subcats) if active_subcats else 'None',
             }
+            
+            # Add rank only if it's not None (ChromaDB doesn't allow None values)
+            if game['Rank:boardgame'] != 21926 and pd.notna(game['Rank:boardgame']):
+                metadata['rank'] = int(game['Rank:boardgame'])
+            
+            # Filter out any remaining None values (ChromaDB requirement)
+            metadata = {k: v for k, v in metadata.items() if v is not None}
             
             # Create document
             doc = Document(
@@ -115,9 +122,9 @@ class BoardGameIndexer:
     def create_vector_store(self, documents: List[Document]) -> Chroma:
         """Create and persist ChromaDB vector store"""
         print("\nCreating vector store...")
-        print("This may take several minutes for 20k+ documents...")
+        print(f"Processing all {len(documents)} documents at once with HuggingFace embeddings...")
         
-        # Create vector store
+        # Process all documents at once - much simpler!
         vectorstore = Chroma.from_documents(
             documents=documents,
             embedding=self.embeddings,
