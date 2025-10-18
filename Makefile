@@ -4,11 +4,25 @@ all: help
 
 help:
 	@echo
-	@echo "Targets:"
-	@echo "install                     - Install environment necessary to support this project."
-	@echo "install-deb                 - Install OS packages necessary to support this project. Assumes apt/dpkg package management system."
-	@echo "install-pip                 - Install Python pakcages necessary to suport this project."
-	@echo "code-agent-gemini-demo      - Run the demo CodeAgent using the Gemini API."
+	@echo "BoardGameGeek RAG System - Available Commands:"
+	@echo "=============================================="
+	@echo "Setup:"
+	@echo "  install                   - Install all dependencies (cross-platform)"
+	@echo "  install-mac               - Install dependencies on macOS (uses brew)"
+	@echo "  install-pip               - Install Python packages only"
+	@echo
+	@echo "Data & Indexing:"
+	@echo "  explore                   - Explore the BoardGameGeek dataset"
+	@echo "  index                     - Build vector database from BGG data"
+	@echo "  clean-index               - Remove vector database"
+	@echo
+	@echo "RAG System:"
+	@echo "  query                     - Interactive RAG query interface"
+	@echo "  test-query                - Run a simple test query"
+	@echo
+	@echo "Environment:"
+	@echo "  clean                     - Clean all generated files"
+	@echo "  clean-all                 - Clean everything including venv"
 	@echo
 
 $(VENV):
@@ -45,7 +59,16 @@ query:
 	source $(VENV)/bin/activate; python -m src.rag_agent
 
 test-query:
-	source $(VENV)/bin/activate; python -c "from src.rag_agent import BoardGameRAG; rag = BoardGameRAG(); rag.query('What are good cooperative games?')"
+	source $(VENV)/bin/activate; python -c "from src.rag_agent import BoardGameRAG; rag = BoardGameRAG(use_preprocessing=False); rag.query('What are good cooperative games?')"
+
+clean:
+	rm -rf chroma_db/
+	rm -rf __pycache__ src/__pycache__
+	find . -name "*.pyc" -delete
+	find . -name ".DS_Store" -delete
+
+clean-all: clean
+	rm -rf $(VENV)
 
 clean-index:
 	rm -rf chroma_db/

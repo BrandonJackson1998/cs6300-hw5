@@ -196,11 +196,30 @@ cython_debug/
 *~
 .virtual_environment
 
-# ChromaDB
+# ChromaDB vector database
 chroma_db/
 
-# Private Data
+# Virtual environment
+.virtual_environment/
+
+# Environment variables
+.env
+
+# BoardGameGeek data files (keep originals)
 /data/*
-!data/wiki_movie_plots_deduped.csv
-!data/manual_local.csv
-!data/manual_server.csv
+!data/artists_reduced.csv
+!data/bgg_data_documentation.txt
+!data/designers_reduced.csv
+!data/games.csv
+!data/mechanics.csv
+!data/publishers_reduced.csv
+!data/ratings_distribution.csv
+!data/subcategories.csv
+!data/themes.csv
+
+# HuggingFace cache
+.cache/
+*/.cache/
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
