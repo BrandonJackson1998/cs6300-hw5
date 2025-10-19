@@ -9,6 +9,7 @@ A sophisticated Retrieval-Augmented Generation (RAG) system for querying BoardGa
 - **Local Embeddings**: Uses HuggingFace embeddings (no API quota limits)
 - **Rating Threshold Filtering**: Precise numeric filtering for "games rated above 8.5"
 - **Edge Case Handling**: Graceful fallbacks when filters are too restrictive
+- **Smart Recommendations**: Structured answers with detailed metadata and contextual explanations
 - **Automated Evaluation**: LLM-as-a-judge quality assessment using Ollama Llama 3.2
 - **Interactive Interface**: Command-line chat interface with example queries
 

@@ -249,11 +249,26 @@ Context (Retrieved Games):
 Question: {question}
 
 Instructions:
-- Answer based ONLY on the provided context
-- Include specific game names when relevant
-- Mention key metadata (player count, playtime, mechanics, themes) when helpful
+- Answer based ONLY on the provided games in the context above
+- Select and recommend the MOST RELEVANT games for this specific query (typically 5-10 games unless the user asks for more)
+- Choose quality over quantity - focus on games that best match the user's request
+- Organize your response with clear structure (use headings when helpful)
+- For each recommended game, use this exact format:
+  * **Game Name**
+  * Rating: X.X/10 (Y ratings)
+  * Players: X-Y
+  * Playtime: X min
+  * Mechanics: [list mechanics from context]
+  * Themes: [list themes from context]
+  * **Why it fits:** [Brief explanation of why this game matches the user's query]
+- Prioritize games by relevance to the query (best matches first)
+- If multiple categories apply, group games logically
+- Provide brief context about what makes each recommendation special
+- Don't overwhelm with too many options unless specifically requested
+- Never mention games not present in the context
 - If the context doesn't contain enough information, say so
-- Be concise but informative
+
+Format: Use clear markdown formatting with headings, bullet points, and emphasis for readability.
 
 Answer:"""
         )
@@ -643,6 +658,79 @@ Game {i}: {meta['name']} ({meta['year_published']})
         
         return "\n".join(context_parts)
     
+    def _select_best_games(self, documents: List[Document], query: str, max_games: int = 12) -> List[Document]:
+        """
+        Select the most relevant games for the specific query
+        
+        Args:
+            documents: All retrieved documents
+            query: Original user query
+            max_games: Maximum number of games to include in context
+            
+        Returns:
+            Filtered list of most relevant games
+        """
+        # For now, return top games by rating if we have too many
+        # This could be enhanced with more sophisticated relevance scoring
+        if len(documents) <= max_games:
+            return documents
+        
+        # If we have many games, prioritize by rating but keep diversity
+        high_rated = [doc for doc in documents if doc.metadata.get('avg_rating', 0) >= 7.5]
+        medium_rated = [doc for doc in documents if 6.5 <= doc.metadata.get('avg_rating', 0) < 7.5]
+        
+        # Take best from high-rated, then fill with medium-rated
+        selected = high_rated[:max_games-2] + medium_rated[:2]
+        
+        # If still not enough, fill with remaining
+        if len(selected) < max_games:
+            remaining = [doc for doc in documents if doc not in selected]
+            selected.extend(remaining[:max_games - len(selected)])
+        
+        return selected[:max_games]
+    
+    def _add_contextual_advice(self, answer: str, query: str, documents: List[Document]) -> str:
+        """
+        Add contextual advice and tips based on the query and retrieved games
+        
+        Args:
+            answer: Generated answer
+            query: Original query
+            documents: Retrieved documents
+            
+        Returns:
+            Enhanced answer with additional context
+        """
+        query_lower = query.lower()
+        advice_parts = []
+        
+        # Add player count advice
+        if any(term in query_lower for term in ['2 player', '2-player', 'two player']):
+            advice_parts.append("💡 **Tip for 2-Player Games**: Look for games with asymmetric roles or variable setups for high replayability.")
+        
+        # Add complexity advice
+        ratings = [doc.metadata.get('game_weight', 0) for doc in documents[:5]]
+        avg_weight = sum(ratings) / len(ratings) if ratings else 0
+        
+        if avg_weight > 3.5:
+            advice_parts.append("⚠️  **Complexity Note**: These games have higher complexity (3.5+ weight). Consider your group's experience with similar games.")
+        elif avg_weight < 2.0:
+            advice_parts.append("✅ **Accessibility Note**: These games are relatively easy to learn (under 2.0 weight), great for new players.")
+        
+        # Add time advice
+        if any(term in query_lower for term in ['quick', 'short', 'fast']):
+            advice_parts.append("⏱️  **Time Tip**: For the shortest games, prioritize those under 30 minutes for quick sessions.")
+        
+        # Add cooperative advice
+        if 'cooperative' in query_lower or 'co-op' in query_lower:
+            advice_parts.append("🤝 **Co-op Tip**: Start with easier difficulty levels and adjust as your team develops strategies together.")
+        
+        if advice_parts:
+            enhanced_answer = answer + "\n\n---\n\n" + "\n\n".join(advice_parts)
+            return enhanced_answer
+        
+        return answer
+    
     def generate(self, query: str, context: str) -> str:
         """
         Generate answer using LLM
@@ -703,7 +791,7 @@ Game {i}: {meta['name']} ({meta['year_published']})
             for i, doc in enumerate(documents, 1):
                 print(f"  {i}. {doc.metadata['name']} (Rating: {doc.metadata['avg_rating']:.2f})")
         
-        # Step 2: Format context
+        # Step 2: Use all retrieved games for context (LLM will select the best ones to recommend)
         context = self.format_context(documents)
         
         # Step 3: Generate answer
@@ -711,22 +799,25 @@ Game {i}: {meta['name']} ({meta['year_published']})
             print(f"\nGenerating answer with Gemini...")
         answer = self.generate(question, context)
         
+        # Step 4: Add contextual advice
+        enhanced_answer = self._add_contextual_advice(answer, question, documents)
+        
         if verbose:
             print(f"✓ Answer generated\n")
             print(f"{'='*80}")
             print("ANSWER:")
             print(f"{'='*80}")
-            print(answer)
+            print(enhanced_answer)
             print(f"{'='*80}\n")
         
-        # Step 4: Evaluate (if judge is available)
+        # Step 6: Evaluate (if judge is available)
         evaluation_scores = None
         if self.judge_llm:
-            evaluation_scores = self.evaluate(question, documents, answer)
+            evaluation_scores = self.evaluate(question, documents, enhanced_answer)
         
         return {
             'question': question,
-            'answer': answer,
+            'answer': enhanced_answer,
             'retrieved_documents': documents,
             'num_retrieved': len(documents),
             'evaluation': evaluation_scores
@@ -757,57 +848,48 @@ Game {i}: {meta['name']} ({meta['year_published']})
         print("EVALUATION (LLM-as-a-judge with Llama 3.2)")
         print("="*80)
         
-        # Create evaluation prompt
-        retrieved_games = "\n".join([
-            f"- {doc.metadata['name']} (Rating: {doc.metadata['avg_rating']:.2f}, "
-            f"Mechanics: {doc.metadata['mechanics'][:100]}...)"
-            for doc in retrieved_docs[:5]  # Show top 5
-        ])
-        
-        eval_prompt = f"""You are an expert evaluator for a board game recommendation system. Evaluate the following query-response pair.
+        eval_prompt = f"""You are an expert evaluator for a board game recommendation system. Evaluate how well this answer responds to the user's query.
 
 QUERY: {query}
-
-RETRIEVED GAMES:
-{retrieved_games}
 
 GENERATED ANSWER:
 {answer}
 
 Evaluate the following aspects on a scale of 1-10:
 
-1. RETRIEVAL RELEVANCE (1-10): Do the retrieved games match what the query asked for?
-   - Check if mechanics, themes, categories match the query
-   - Check if ratings/player counts are appropriate
-   - Are these games actually relevant?
+1. RETRIEVAL RELEVANCE (1-10): Do the games mentioned in the answer match what the query asked for?
+   - Check if mechanics, themes, categories align with the query
+   - Are the recommended games actually relevant to the user's request?
+   - Does the answer address the right type of games?
 
-2. ANSWER ACCURACY (1-10): Is the generated answer factually correct based on the retrieved games?
-   - Does it accurately describe the games?
-   - Are the ratings, player counts, mechanics correct?
-   - No hallucinations?
+2. ANSWER ACCURACY (1-10): Is the generated answer factually correct about the games mentioned?
+   - Are the ratings, player counts, mechanics, themes accurate?
+   - No obvious errors or contradictions in game descriptions?
+   - Does the information seem reliable and consistent?
 
 3. ANSWER COMPLETENESS (1-10): Does the answer fully address the query?
    - Does it answer all parts of the question?
-   - Provides enough detail?
-   - Addresses user intent?
+   - Provides sufficient detail and context for decision-making?
+   - Addresses the user's intent and preferences appropriately?
 
-4. CITATION QUALITY (1-10): Does the answer properly reference specific games?
-   - Names specific games?
-   - Includes relevant metadata (players, time, mechanics)?
-   - Clear which games are being recommended?
+4. CITATION QUALITY (1-10): Are the game recommendations well-presented?
+   - Are game names clearly stated?
+   - Does it include helpful metadata (ratings, players, time, mechanics)?
+   - Are the recommendations well-organized and easy to understand?
+   - Good balance of breadth vs. depth in recommendations?
 
 Respond in this EXACT format:
 RETRIEVAL_RELEVANCE: [score]/10
-REASON: [one sentence]
+REASON: [one sentence explaining the score]
 
-ANSWER_ACCURACY: [score]/10
-REASON: [one sentence]
+ANSWER_ACCURACY: [score]/10  
+REASON: [one sentence explaining the score]
 
 ANSWER_COMPLETENESS: [score]/10
-REASON: [one sentence]
+REASON: [one sentence explaining the score]
 
 CITATION_QUALITY: [score]/10
-REASON: [one sentence]
+REASON: [one sentence explaining the score]
 
 OVERALL: [average score]/10
 """
@@ -840,9 +922,9 @@ OVERALL: [average score]/10
         
         scores = {}
         
-        # Extract scores using regex
+        # Extract scores using regex - handle common typos
         patterns = {
-            'retrieval_relevance': r'RETRIEVAL_RELEVANCE:\s*(\d+(?:\.\d+)?)',
+            'retrieval_relevance': r'(?:RETRIEVAL_RELEVANCE|RETIEVAL_RELEVANCE):\s*(\d+(?:\.\d+)?)',  # Both correct and typo
             'answer_accuracy': r'ANSWER_ACCURACY:\s*(\d+(?:\.\d+)?)',
             'answer_completeness': r'ANSWER_COMPLETENESS:\s*(\d+(?:\.\d+)?)',
             'citation_quality': r'CITATION_QUALITY:\s*(\d+(?:\.\d+)?)',
