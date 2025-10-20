@@ -1,279 +1,253 @@
-# BoardGameGeek RAG System
+# BoardGameGeek RAG Agent
 
-A sophisticated Retrieval-Augmented Generation (RAG) system for querying BoardGameGeek data using natural language. The system combines semantic search with intelligent filtering and LLM-powered query preprocessing.
+An AI-powered board game recommendation system that understands natural language queries and finds the perfect games using intelligent semantic search and metadata filtering.
 
-## 🎯 Features
+**Key Capabilities:**
+- Processes natural language queries with LLM-based preprocessing
+- Searches 21,924 BoardGameGeek games using semantic similarity
+- Filters by mechanics, themes, player counts, ratings, and playtime
+- Generates structured recommendations with detailed metadata
+- Provides automated quality evaluation using LLM-as-a-judge
 
-- **Intelligent Query Processing**: LLM-based preprocessing extracts structured filters from natural language queries
-- **Advanced Filtering**: Support for mechanics, themes, categories, player counts, ratings, and playtime
-- **Local Embeddings**: Uses HuggingFace embeddings (no API quota limits)
-- **Rating Threshold Filtering**: Precise numeric filtering for "games rated above 8.5"
-- **Edge Case Handling**: Graceful fallbacks when filters are too restrictive
-- **Smart Recommendations**: Structured answers with detailed metadata and contextual explanations
-- **Automated Evaluation**: LLM-as-a-judge quality assessment using Ollama Llama 3.2
-- **Interactive Interface**: Command-line chat interface with example queries
+**Query Processing:** Transform "cooperative games for 4 players rated above 8.0" into structured filters, semantic search, and ranked recommendations. The agent prioritizes relevance while respecting user constraints and preferences.
 
 ## 🚀 Quick Start
 
-### 1. Setup Environment
+## Prerequisites
+
+- **Python 3.12+**  
+  Make sure you are using Python 3.12 or later.
+
 ```bash
-# Clone and enter the repository
-git clone <repository-url>
-cd cs6300-hw5
-
-# Install dependencies (macOS)
-make install-mac
-
-# Or install dependencies (Linux/WSL)
-make install
-
-# Set up environment variables
-# Create .env file and add your GEMINI_API_KEY
-echo "GEMINI_API_KEY=your_api_key_here" > .env
+python3 --version
 ```
 
-### 2. Build Vector Database
+- **API Keys (stored in `.env`)**  
+  You will need API keys for the LLM services:
+
+1. **Gemini API key**  
+   - Create via [Google AI Studio](https://aistudio.google.com/) → "Get API key"  
+   - Save in `.env` as:  
+     ```
+     GEMINI_API_KEY=your_gemini_api_key
+     ```
+
+2. **LangSmith API Key**  
+   - Create via [LangSmith](https://smith.langchain.com/)  
+   - Save in `.env` as:  
+     ```
+     LANGCHAIN_API_KEY=your_langsmith_api_key
+     ```
+
+## Setup
+
+1. **Create a virtual environment**
+
+Mac:
 ```bash
-# Index the BoardGameGeek data (creates chroma_db/)
+make .virtual_environment
+source .virtual_environment/bin/activate
+```
+
+2. **Install dependencies**
+
+On Mac:
+```bash
+make install-mac
+```
+
+On Linux (teacher's original setup):
+```bash
+make install
+```
+
+---
+
+### Build Vector Database
+```bash
 make index
 ```
 
-### 3. Setup Evaluation (Optional)
+This processes the BoardGameGeek dataset and creates a searchable vector database with 43,848 document chunks.
 
-For automated quality assessment with LLM-as-a-judge:
-
+### Run the RAG Agent
 ```bash
-# Complete Ollama setup (macOS)
-make ollama-setup
-
-# Or manual setup:
-make ollama-install    # Install Ollama
-make ollama-start      # Start service
-make ollama-pull-model # Download Llama 3.2 model
-
-# Check status
-make ollama-status
+make query
 ```
 
-**Note**: Evaluation works without Ollama (graceful fallback), but with Ollama you get:
-- Retrieval relevance scoring (1-10)
-- Answer accuracy assessment (1-10) 
-- Completeness evaluation (1-10)
-- Citation quality analysis (1-10)
-- Visual score bars and detailed feedback
-
-### 4. Start Querying
+### Setup Evaluation (Optional)
 ```bash
-# Launch interactive query interface
+make ollama-setup
+```
+
+This installs Ollama and Llama 3.2 for automated quality assessment with detailed scoring.
+
+### 💡 Example Usage
+
+```bash
+# 1. Build the vector database
+make index
+
+# 2. Run the interactive agent
 make query
 
-# Or run a quick test
-make test-query
+# 3. Try these queries:
+# "What are good strategy games for 2 players?"
+# "Cooperative games for family game night with 4 people" 
+# "Games rated above 8.5 with worker placement"
 ```
 
-## 📊 Dataset
+The agent will process your natural language query and return personalized game recommendations.
 
-The system uses BoardGameGeek data including:
-- **21,924 games** with rich metadata
-- **Mechanics**: Worker Placement, Cooperative, Deck Building, etc.
-- **Themes**: Fantasy, Sci-Fi, Medieval, etc.
-- **Categories**: Strategy, Party, Family, etc.
-- **Ratings**: Community and Bayes average ratings
-- **Player counts** and **playtime** information
+## Example Queries
 
-## 🔍 Query Examples
+Try these natural language queries with the system:
 
-The system understands natural language queries:
-
-```
+```bash
+# After running 'make query', try:
 "What are good strategy games for 2 players?"
-"Find cooperative games for family game night with 4 people"
-"Strategy games rated 8.5 and above"
-"Worker placement games with fantasy themes under 90 minutes"
-"Best party games for large groups"
+"Cooperative games for family game night with 4 people" 
+"Games rated above 8.5 with worker placement mechanics"
+"Quick party games under 30 minutes for large groups"
+"Fantasy themed games like Gloomhaven but shorter"
 ```
 
-## 🛠 Architecture
+## Available Make Commands
+```bash
+# Environment Setup
+make install-mac        # Install on macOS with Homebrew
+make install           # Install on Linux/Ubuntu with apt
+make index             # Build vector database from BoardGameGeek data
 
-### Core Components
+# Running the System
+make query             # Interactive board game recommendation agent
 
-1. **QueryPreprocessor**: LLM-based filter extraction from natural language
-2. **BoardGameRAG**: Main RAG pipeline with retrieval and generation
-3. **Intelligent Filtering**: Metadata-based filtering with fallbacks
-4. **HuggingFace Embeddings**: Local embeddings using all-MiniLM-L6-v2
-5. **ChromaDB**: Vector database for semantic search
+# Evaluation Setup (Optional)
+make ollama-setup      # Complete Ollama + Llama 3.2 setup
+make ollama-install    # Install Ollama only
+make ollama-start      # Start Ollama service
+make ollama-stop       # Stop Ollama service
+make ollama-status     # Check Ollama status
 
-### Data Flow
-
+# Maintenance
+make clean             # Clean generated files
+make clean-index       # Remove vector database only
+make clean-all         # Deep clean including virtual environment
 ```
-User Query → LLM Preprocessing → Vector Search → Metadata Filtering → Rating Sort → Deduplication → LLM Response
-```
 
-## 📁 Project Structure
+See `src/rag_agent.py` for complete configuration options.
 
-```
-cs6300-hw5/
-├── src/
-│   ├── indexing.py          # Data processing and vector database creation
-│   ├── rag_agent.py         # Main RAG system with query preprocessing
-│   └── __init__.py          # Package initialization
-├── data/                    # BoardGameGeek dataset
-├── chroma_db/              # Generated vector database (created by indexing)
-├── Makefile                # Build automation
-├── requirements.txt        # Python dependencies
-└── README.md              # This file
-```
+## 🏗️ Architecture
+
+### 3-Component System
+
+The system uses a streamlined 3-component architecture:
+
+1. **Query Preprocessor** - LLM-based filter extraction and query sanitization
+2. **Vector Search Engine** - ChromaDB with HuggingFace embeddings for semantic similarity
+3. **Response Generator** - Gemini 2.5 Flash for structured game recommendations
+
+### Core Agent (`src/rag_agent.py`)
+- **Google Gemini Integration**: Uses Gemini 2.5 Flash with LangChain
+- **Query Sanitization**: Optimizes queries for better semantic search
+- **Intelligent Filtering**: Metadata-based filtering with graceful fallbacks
+- **Local Embeddings**: HuggingFace all-MiniLM-L6-v2 (no API limits)
+- **Automated Evaluation**: Ollama Llama 3.2 LLM-as-a-judge scoring
 
 ## 🧪 Testing
 
-Test the system with a simple query:
-
+#### Interactive Testing
 ```bash
-# Run a quick test query
-make test-query
+make query             # Full interactive interface with example queries
 ```
 
-For more comprehensive testing, you can run queries interactively:
+Note: This project does not include automated unit tests - testing is done through the interactive query interface when the judging system with Ollama is on.
 
+## 📊 Dataset
+
+After running `make index`, you'll have access to:
+
+### **21,924 BoardGameGeek Games** with rich metadata:
+- **Mechanics**: Worker Placement, Cooperative, Deck Building, Area Control, Hand Management
+- **Themes**: Fantasy, Science Fiction, Medieval, Horror, Economic, War
+- **Categories**: Strategy, Party, Family, Abstract, Thematic
+- **Ratings**: Average ratings + Bayes-adjusted Geek ratings
+- **Player Info**: Min/max players, recommended counts, playtime
+- **Complexity**: Weight scores from 1-5
+
+### Generate Query Examples
 ```bash
-# Launch interactive interface and try various queries
-make query
+# Try these natural language queries:
+"What are good strategy games for 2 players?"
+"Cooperative games for family game night with 4 people"
+"Games rated above 8.5 with worker placement mechanics"
+"Quick party games under 30 minutes for large groups"
+"Fantasy themed games like Gloomhaven but shorter"
 ```
 
-## ⚙️ Configuration
+## File Structure
+```
+cs6300-hw5/
+│
+├── 📋 Core Files
+│   ├── README.md          # Project documentation
+│   ├── Makefile           # Commands (index, query, ollama-setup, etc.)
+│   ├── requirements.txt   # Python dependencies
+│   └── .env               # API keys
+│
+├── 🧠 Source Code (src/)
+│   ├── rag_agent.py      # Main RAG agent with query preprocessing
+│   ├── indexing.py       # Vector database creation and data processing
+│   └── __init__.py       # Package initialization
+│
+├── 📊 Data
+│   ├── data/             # BoardGameGeek dataset (CSV files)
+│   └── chroma_db/        # Generated vector database (43,848 chunks)
+│
+└── ⚙️ Config
+    └── .env              # Environment variables (API keys)
+```
+
+## 🔧 Advanced Configuration
 
 ### Environment Variables (.env)
 ```bash
 # Required: Gemini API key for LLM responses
-GEMINI_API_KEY=your_api_key_here
+GEMINI_API_KEY=your_gemini_api_key
 
-# Optional: LangSmith tracing
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=your_langsmith_key
+# Required: LangSmith API key for tracing and monitoring
+LANGCHAIN_API_KEY=your_langsmith_api_key
 ```
-
-Create a `.env` file in the project root with these variables.
 
 ### System Parameters
-- **Embedding Model**: all-MiniLM-L6-v2 (384 dimensions)
+- **Embedding Model**: all-MiniLM-L6-v2 (384 dimensions, local)
 - **Vector Database**: ChromaDB with persistence
-- **LLM**: Gemini 2.5 Flash
-- **Evaluation Judge**: Ollama Llama 3.2 (optional)
+- **LLM**: Gemini 2.5 Flash for query preprocessing and answer generation
+- **Evaluation Judge**: Ollama Llama 3.2 (optional, for quality scoring)
 - **Default Results**: Top 20 games per query
-- **Indexing Strategy**: 2-chunk per game (description + metadata)
+- **Indexing Strategy**: 2 chunks per game (description + metadata summary)
 
-### Ollama Setup (for Evaluation)
-
-The system includes automated quality assessment using Ollama Llama 3.2 as an LLM judge:
-
-```bash
-# Complete setup (macOS)
-make ollama-setup
-
-# Manual steps
-make ollama-install      # Install Ollama via brew (macOS) 
-make ollama-start        # Start Ollama service
-make ollama-pull-model   # Download Llama 3.2 model (2GB)
-
-# Management
-make ollama-status       # Check service status
-make ollama-stop         # Stop Ollama service
-```
-
-**Evaluation Features**:
-- **Retrieval Relevance**: How well retrieved games match the query
-- **Answer Accuracy**: Factual correctness of generated responses  
-- **Answer Completeness**: Whether all aspects of query are addressed
-- **Citation Quality**: How well games are referenced and described
-- **Visual Scoring**: Progress bars and detailed feedback after each query
-
-## 🔧 Advanced Usage
-
-### Disable LLM Preprocessing
-```bash
-# Use keyword-based filtering only
-python -c "from src.rag_agent import BoardGameRAG; rag = BoardGameRAG(use_preprocessing=False); rag.query('your question')"
-```
-
-### Customize Result Count
-```python
-from src.rag_agent import BoardGameRAG
-rag = BoardGameRAG(top_k=10)  # Return fewer results
-```
-
-### Direct Filter Access
-```python
-# Access extracted filters directly
-preprocessor = QueryPreprocessor()
-filters = preprocessor.preprocess("cooperative games for 4 players")
-print(filters)  # {'mechanics': ['Cooperative Game'], 'min_players': 4, 'max_players': 4}
-```
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-1. **API Key Error**: Ensure `GEMINI_API_KEY` is set in `.env`
-2. **Import Errors**: Run `make install` to install dependencies
-3. **No Results**: Check if `chroma_db/` exists, run `make index` if not
-4. **Slow First Run**: HuggingFace model downloads on first use
-
-### Cleaning Up
+## Cleaning Up
 ```bash
 # Remove vector database only
 make clean-index
 
-# Remove all generated files
+# Remove generated files
 make clean
 
 # Remove everything including virtual environment
 make clean-all
 ```
 
-## 📝 Technical Details
+## � License
 
-### Query Processing Pipeline
-
-1. **Input**: Natural language query
-2. **Preprocessing**: LLM extracts structured filters (optional)
-3. **Vector Search**: Semantic similarity using embeddings
-4. **Filtering**: Apply metadata filters (mechanics, ratings, etc.)
-5. **Sorting**: Order by rating when relevant
-6. **Deduplication**: Remove duplicate games
-7. **Generation**: LLM creates final response
-
-### Filtering Capabilities
-
-- **Mechanics**: Worker Placement, Cooperative, Deck Building, etc.
-- **Themes**: Fantasy, Sci-Fi, Medieval, Horror, etc.
-- **Categories**: Strategy, Party, Family, Abstract, etc.
-- **Player Count**: Exact numbers, ranges, or special cases (solo, large group)
-- **Ratings**: Threshold filtering with inclusive/exclusive operators
-- **Playtime**: Quick (<30min), long (>120min), or custom ranges
-
-### Performance Optimizations
-
-- **Local Embeddings**: No API rate limits
-- **Smart Candidate Retrieval**: 3x-15x multiplier based on filter complexity
-- **Graceful Fallbacks**: Relaxes filters when too few results found
-- **Efficient Deduplication**: Early termination when target count reached
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Update documentation
-5. Submit a pull request
-
-## 📄 License
-
-[Add your license information here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- BoardGameGeek for the comprehensive game dataset
-- HuggingFace for local embedding models
-- LangChain for RAG framework
-- ChromaDB for vector storage
-- Google Gemini for language model capabilities
+- **BoardGameGeek**: Comprehensive game dataset and community ratings
+- **Google Gemini**: Advanced AI capabilities for query processing and response generation
+- **HuggingFace**: Local embedding models (all-MiniLM-L6-v2)
+- **ChromaDB**: Efficient vector storage and similarity search
+- **Ollama**: Local LLM hosting for automated evaluation
+- **LangChain**: Framework for RAG system development

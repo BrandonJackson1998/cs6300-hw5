@@ -18,7 +18,6 @@ help:
 	@echo
 	@echo "RAG System:"
 	@echo "  query                     - Interactive RAG query interface"
-	@echo "  test-query                - Run a simple test query"
 	@echo
 	@echo "Evaluation (Ollama):"
 	@echo "  ollama-install            - Install Ollama (macOS only)"
@@ -65,9 +64,6 @@ index:
 
 query:
 	source $(VENV)/bin/activate; python -m src.rag_agent
-
-test-query:
-	source $(VENV)/bin/activate; python -c "from src.rag_agent import BoardGameRAG; rag = BoardGameRAG(use_preprocessing=False); rag.query('What are good cooperative games?')"
 
 clean:
 	rm -rf chroma_db/
