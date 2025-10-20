@@ -117,6 +117,9 @@ Try these natural language queries with the system:
 # Environment Setup
 make install-mac        # Install on macOS with Homebrew
 make install           # Install on Linux/Ubuntu with apt
+
+# Data & Indexing
+make explore           # Explore the BoardGameGeek dataset
 make index             # Build vector database from BoardGameGeek data
 
 # Running the System
@@ -200,7 +203,10 @@ cs6300-hw5/
 │   ├── indexing.py       # Vector database creation and data processing
 │   └── __init__.py       # Package initialization
 │
-├── 📊 Data
+├── �️ Scripts (scripts/)
+│   └── explore_data.py   # Dataset exploration and analysis
+│
+├── �📊 Data
 │   ├── data/             # BoardGameGeek dataset (CSV files)
 │   └── chroma_db/        # Generated vector database (43,848 chunks)
 │
