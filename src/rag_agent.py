@@ -23,7 +23,7 @@ from langchain.schema import Document
 load_dotenv()
 
 class QueryPreprocessor:
-    """Uses LLM to extract structured filters from natural language queries"""
+    """Uses LLM to extract structured filters from natural language queries and sanitize search terms"""
     
     def __init__(self):
         api_key = os.getenv("GEMINI_API_KEY")
@@ -56,6 +56,57 @@ class QueryPreprocessor:
             print(f"Warning: Query preprocessing failed: {e}")
             # Return empty filters on failure (fallback to normal retrieval)
             return self._empty_filters()
+    
+    def sanitize_query(self, query: str) -> str:
+        """
+        Sanitize and optimize query for better semantic search
+        
+        Args:
+            query: Raw user query
+            
+        Returns:
+            Cleaned query optimized for vector similarity search
+        """
+        sanitization_prompt = f"""You are a board game search query optimizer. Transform the user's natural language query into a clean, optimized search query that will work better for semantic similarity search.
+
+Your task:
+1. Remove filler words and conversational elements ("can you", "please", "I want", etc.)
+2. Extract the core board game concepts and requirements
+3. Convert to clear, searchable terms
+4. Focus on game mechanics, themes, categories, and gameplay elements
+5. Keep player count and time constraints if mentioned
+6. PRESERVE unique thematic elements and specific gameplay descriptions (e.g., "play as animals", "build cities", "explore space")
+7. Keep specific game references and comparisons
+8. Preserve the intent but make it more semantic search-friendly
+
+Examples:
+- "Can you recommend some good strategy games for 2 players?" → "strategy games 2 players"
+- "I'm looking for party games that are quick and fun" → "party games quick fun"
+- "What are the best cooperative games like Pandemic but shorter?" → "cooperative games Pandemic shorter playtime"
+- "Games with worker placement that aren't too complex" → "worker placement simple mechanics"
+- "I want games where you play as a horse" → "games play as horse"
+- "Looking for games about building railroads in the old west" → "games building railroads old west"
+- "Can you suggest fantasy games with dragons and magic?" → "fantasy games dragons magic"
+
+User Query: "{query}"
+
+Return ONLY the optimized search query, no explanation:"""
+
+        try:
+            response = self.llm.invoke(sanitization_prompt)
+            sanitized = response.content.strip()
+            
+            # Basic validation - ensure we got a reasonable response
+            if len(sanitized) < 3 or len(sanitized) > len(query) * 2:
+                print(f"  Warning: Query sanitization produced unusual result, using original")
+                return query
+            
+            print(f"  Sanitized query: '{query}' → '{sanitized}'")
+            return sanitized
+            
+        except Exception as e:
+            print(f"  Warning: Query sanitization failed: {e}, using original")
+            return query
     
     def _create_extraction_prompt(self, query: str) -> str:
         """Create prompt for LLM to extract filters"""
@@ -295,6 +346,10 @@ Answer:"""
             non_empty_filters = dict((k, v) for k, v in filters.items() if v)
             print(f"  Extracted filters: {non_empty_filters}")
             
+            # Sanitize query for better vectorization
+            print("  Sanitizing query for semantic search...")
+            search_query = self.preprocessor.sanitize_query(query)
+            
             # Show how the query would be interpreted
             if non_empty_filters:
                 interpretation_parts = []
@@ -327,13 +382,15 @@ Answer:"""
         else:
             # Fallback to keyword-based extraction
             filters = self._extract_filters(query.lower())
+            search_query = self._basic_sanitize_query(query)  # Basic sanitization without LLM
+            print(f"  Basic sanitization: '{query}' → '{search_query}'")
         
-        # Step 2: Retrieve large candidate set
+        # Step 2: Retrieve large candidate set using sanitized query
         # Use more candidates for rating filtering since it's very restrictive
         has_rating_filter = filters['min_rating'] is not None or filters['max_rating'] is not None
         candidate_multiplier = 15 if has_rating_filter else (10 if filters['sort_by_rating'] else 5)
         candidates = self.vectorstore.similarity_search(
-            query=query,
+            query=search_query,  # Use sanitized query for better semantic search
             k=self.top_k * candidate_multiplier
         )
         
@@ -372,6 +429,47 @@ Answer:"""
         
         return result
     
+    def _basic_sanitize_query(self, query: str) -> str:
+        """
+        Basic query sanitization without LLM (fallback method)
+        Preserves thematic content and specific descriptions
+        
+        Args:
+            query: Raw user query
+            
+        Returns:
+            Basic cleaned query
+        """
+        import re
+        
+        # Remove only very basic conversational starters (more conservative approach)
+        filler_phrases = [
+            r'\bcan you\b', r'\bcould you\b', r'\bplease\b',
+            r'\bi am looking for\b', r'\blooking for\b',
+            r'\brecommend me\b', r'\bsuggest\b', r'\bfind me\b', 
+            r'\bshow me\b', r'\bwhat are\b', r'\btell me about\b',
+            r'\bhelp me find\b', r'\bany suggestions for\b'
+        ]
+        
+        cleaned = query.lower()
+        
+        # Remove only the most basic filler phrases
+        for filler in filler_phrases:
+            cleaned = re.sub(filler, '', cleaned, flags=re.IGNORECASE)
+        
+        # Clean up extra punctuation but preserve hyphens and important punctuation
+        cleaned = re.sub(r'[?!]+', '', cleaned)  # Remove question marks and exclamation points
+        cleaned = re.sub(r',+', ' ', cleaned)    # Replace commas with spaces
+        
+        # Remove extra whitespace
+        cleaned = ' '.join(cleaned.split())
+        
+        # If result is too short or removes too much, return original
+        if len(cleaned.strip()) < len(query) * 0.4:  # If we removed more than 60% of content
+            return query
+        
+        return cleaned.strip() if cleaned.strip() else query
+
     def _extract_filters(self, query_lower: str) -> Dict[str, Any]:
         """Extract filters from query"""
         filters = {
@@ -646,7 +744,7 @@ Answer:"""
             meta = doc.metadata
             context_part = f"""
 Game {i}: {meta['name']} ({meta['year_published']})
-- Rating: {meta['avg_rating']:.2f}/10 ({meta['num_ratings']} ratings)
+- Rating: {meta['avg_rating']:.2f}/10 ({meta['num_ratings']} ratings, Geek: {meta.get('bayes_avg_rating', 0):.2f})
 - Players: {meta['min_players']}-{meta['max_players']}
 - Playtime: {meta['mfg_playtime']} min
 - Weight: {meta['game_weight']:.2f}/5
@@ -789,7 +887,9 @@ Game {i}: {meta['name']} ({meta['year_published']})
             print(f"✓ Retrieved {len(documents)} games\n")
             print("Retrieved Games:")
             for i, doc in enumerate(documents, 1):
-                print(f"  {i}. {doc.metadata['name']} (Rating: {doc.metadata['avg_rating']:.2f})")
+                avg_rating = doc.metadata.get('avg_rating', 0)
+                bayes_rating = doc.metadata.get('bayes_avg_rating', 0)
+                print(f"  {i}. {doc.metadata['name']} (Avg: {avg_rating:.2f}, Geek: {bayes_rating:.2f})")
         
         # Step 2: Use all retrieved games for context (LLM will select the best ones to recommend)
         context = self.format_context(documents)
